@@ -1,27 +1,15 @@
-# श्री साई CHS PWA v0.4
+# Shri Sai CHS PWA v0.6
 
-Mobile-first Marathi society management PWA prototype.
+## Access
+- Member mode is view-only.
+- Admin mode requires PIN 9870.
+- Admin sees all 52 members and can modify demo data.
+- Members can view society-wide information and only their own member-specific data.
 
-## Included
-- Dashboard shows only **52 members**; flat numbers are shown inside individual member details.
-- 52 dummy member records with flat numbers 5-A-01…5-A-26 and 5-B-01…5-B-26.
-- Member profile with owner/tenant, NOC and required document statuses.
-- ₹1,000 monthly maintenance demo and Marathi Shri Sai CHS receipt.
-- Monthly notification demo for the 1st of every month (production SMS requires backend scheduler + SMS provider).
-- Committee members, committee meetings, AGM, MOM and attendee records.
-- Maharashtra Co-operative Societies Act section references explicitly supported by the uploaded registration certificate: sections 9(1), 12(1) and Rule 10(1).
-- Penalty and legal-action tracking for defaulters.
-- Complaint registration with committee notification state.
-- Feedback / concerns.
-- Water timings.
-- Caretaker record: Vitthal Sarode, ₹8,000/month, duties and attendance.
-- Existing redevelopment placeholder section and audit log.
+## Header
+- Marathi society name and registration number.
+- Sai Baba corner image.
 
-## Society certificate source
-The uploaded registration certificate is represented in the UI as the basis for society name/classification/registration references. The certificate image is the source for the registration details.
-
-## Run
-Serve over HTTP/HTTPS:
-`python3 -m http.server 8080`
-
-This is a frontend demo. For production use, add authentication, PostgreSQL, secure document/object storage, SMS/WhatsApp provider, payment gateway webhooks, server-side scheduling, RBAC and immutable audit logging.
+## Notifications
+- Demo recipient configured: 9594595867.
+- The browser/PWA UI can display notification status, but real SMS/WhatsApp delivery requires a backend scheduler and an SMS/WhatsApp provider API.

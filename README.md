@@ -1,4 +1,4 @@
-# श्री साई CHS PWA v0.3
+# श्री साई CHS PWA v0.4
 
 Mobile-first Marathi society management PWA prototype.
 

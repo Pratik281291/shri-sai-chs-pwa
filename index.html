@@ -109,7 +109,7 @@ function go(tab){state.tab=tab;save();render()}
 function render(){
  updateSocietyHeader();
  const admin=state.role==='admin';
- document.querySelectorAll('.tabs button').forEach(b=>{b.style.display=(admin||b.dataset.tab==='home')?'':'none';b.classList.toggle('active',b.dataset.tab===state.tab)});
+ document.querySelectorAll('.tabs button').forEach(b=>{b.style.display='';b.classList.toggle('active',b.dataset.tab===state.tab)});
  document.getElementById('roleBtn').textContent=admin?'ADMIN':'MEMBER';
  document.getElementById('readOnlyLabel').textContent=admin?'Full Access':'View Only';
  if(!admin){main.innerHTML=memberPortal();return;}
@@ -204,6 +204,8 @@ function testBrowserNotification(){
  if(Notification.permission==='granted')show();
  else Notification.requestPermission().then(p=>p==='granted'?show():alert('Notification permission दिलेली नाही.'));
 }
+async function sendRealSms(){try{const r=await fetch('/api/send-sms',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({to:'9594595867',message:'Shri Sai CHS: Realtime notification test. Admin SMS integration is active.'})});const d=await r.json();if(!r.ok)throw new Error(d.error||'SMS failed');state.notification.lastSent=new Date().toLocaleString('mr-IN');save();alert('SMS sent successfully to 9594595867.');}catch(e){alert('SMS not sent: '+e.message)}}
+async function notifyAdmin(event,detail){try{await fetch('/api/notify-admin',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({event,detail})});}catch(e){console.warn('Admin notification failed',e)}}
 function sendAllDemo(){let month='ऑक्टोबर 2026';state.lastNotificationRun=new Date().toLocaleString('mr-IN');state.audit.unshift({date:state.lastNotificationRun,action:'मासिक SMS डेमो',detail:'52 देखभाल स्मरणपत्रे तयार'});save();openHtml(`<h2>डेमो SMS रन</h2><p class="muted">52 संदेश तयार झाले. प्रत्यक्ष SMS साठी SMS provider जोडणे आवश्यक आहे.</p><div class="card">${state.members.slice(0,5).map(m=>`<div class="row"><div><b>${esc(m.name)} • ${esc(m.mobile)}</b><div class="muted">श्री साई CHS: ${month} देखभाल ₹${m.maintenance}. कृपया देय तारखेपूर्वी भरणा करा.</div></div><span class="pill ok">तयार</span></div>`).join('')}<div class="muted" style="padding-top:10px">+ ${state.members.length-5} संदेश</div></div>`)}
 function committeeModal(){
  let rows=state.committee.map(x=>`<div class="listitem"><b>${esc(x[0])}</b><div>${esc(x[1])}</div><div class="muted">${esc(x[2])}</div></div>`).join('');
@@ -223,7 +225,7 @@ function waterModal(){openHtml(`<h2>💧 पाणीपुरवठा वे�
 function editWater(){let m=prompt('सकाळची वेळ',state.water.morning);if(m!==null)state.water.morning=m;let e=prompt('संध्याकाळची वेळ',state.water.evening);if(e!==null)state.water.evening=e;save();closeModal();render()}
 function caretakerModal(){openHtml(`<h2>🧹 केअरटेकर / सेवक</h2><div class="card"><div class="row"><span>नाव</span><b>${esc(state.caretaker.name)}</b></div><div class="row"><span>भूमिका</span><b>${esc(state.caretaker.role)}</b></div><div class="row"><span>मासिक वेतन</span><b>${money(state.caretaker.salary)}</b></div><div class="row"><span>मोबाइल</span><b>${esc(state.caretaker.mobile)}</b></div><div class="row"><span>उपस्थिती</span><b>${esc(state.caretaker.attendance)}</b></div></div><div class="section"><h2>कामांची यादी</h2></div><div class="listbox">${state.caretaker.works.map(w=>`<div class="listitem">✓ ${esc(w)}</div>`).join('')}</div><button class="btn" onclick="alert('डेमो: कर्मचारी पगार/उपस्थिती backend मध्ये जतन केली जाईल.')">पगार नोंद</button>`)}
 function openModal(type){
- if(type==='notify')openHtml(`<h2>📱 मासिक देखभाल सूचना</h2><div class="card"><div class="row"><span>वेळापत्रक</span><b>दर महिन्याची १ तारीख</b></div><div class="row"><span>Admin recipient</span><b>9594595867</b></div><div class="row"><span>रक्कम</span><b>प्रत्येक सभासदाची चालू मागणी</b></div><div class="row"><span>स्थिती</span><span class="pill warn">SMS provider + backend scheduler required</span></div></div><div class="actions"><button class="btn" onclick="sendAllDemo()">डेमो SMS रन</button><button class="btn secondary" onclick="testBrowserNotification()">Test Realtime Notification</button></div>`);
+ if(type==='notify')openHtml(`<h2>📱 मासिक देखभाल सूचना</h2><div class="card"><div class="row"><span>वेळापत्रक</span><b>दर महिन्याची १ तारीख</b></div><div class="row"><span>Admin recipient</span><b>9594595867</b></div><div class="row"><span>रक्कम</span><b>प्रत्येक सभासदाची चालू मागणी</b></div><div class="row"><span>स्थिती</span><span class="pill warn">SMS provider + backend scheduler required</span></div></div><div class="actions"><button class="btn" onclick="sendAllDemo()">डेमो SMS रन</button><button class="btn secondary" onclick="testBrowserNotification()">Test Browser Notification</button><button class="btn" onclick="sendRealSms()">Send Real SMS Test</button></div>`);
  else if(type==='committee')committeeModal();
  else if(type==='complaints')complaintModal();
  else if(type==='feedback')feedbackModal();
@@ -249,52 +251,97 @@ function switchRole(role,flat){if(role==='admin'){requestAdminPIN();return}state
 function memberPortal(){
  let m=state.members.find(x=>x.flat===state.selectedMemberFlat)||state.members[0];
  let docs=Object.entries(m.documents).map(([k,v])=>`<div class="doc"><b>${label(k)}</b><div class="muted">${v}</div></div>`).join('');
- let due=fyMonths(state.currentFY).filter(x=>!isPaid(m,x)).length*m.maintenance;
- let myComplaints=state.complaints.filter(c=>c.member===m.name);
- let myFeedback=state.feedback.filter(f=>f.member===m.name);
+ let months=fyMonths(state.currentFY);
+ let due=months.reduce((sum,x)=>sum+(isPaid(m,x)?0:m.maintenance),0);
+ let totalDue=state.members.reduce((sum,x)=>sum+months.length*x.maintenance,0);
+ let totalReceived=state.members.reduce((sum,x)=>sum+months.filter(y=>isPaid(x,y)).length*x.maintenance,0);
+ let openComplaints=state.complaints.filter(c=>c.status!=='निकाली').length;
+ let pendingDocs=state.members.reduce((x,mm)=>x+Object.values(mm.documents).filter(v=>v==='प्रलंबित').length,0);
  return `<section class="hero">
-   <h1>श्री साई सहकारी गृहनिर्माण संस्था मर्यादित</h1>
-   <p>Member Portal • View Only</p>
-   <div class="statusbar"><span class="badge">${esc(m.name)}</span><span class="badge">फ्लॅट: ${esc(m.flat)}</span><span class="badge">नोंदणी क्र.: ${esc(SOCIETY.registration)}</span></div>
+   <h1>${esc(SOCIETY.name)}</h1>
+   <p>Dashboard • View Only • ${esc(state.currentFY)}</p>
+   <div class="statusbar"><span class="badge">52 सभासद</span><span class="badge">नोंदणी क्र.: ${esc(SOCIETY.registration)}</span><span class="badge">फक्त View</span></div>
  </section>
  <div class="grid">
-   <div class="card metric"><small>मासिक देखभाल</small><b>${money(m.maintenance)}</b></div>
-   <div class="card metric"><small>${esc(state.currentFY)} थकबाकी</small><b>${money(due)}</b></div>
-   <div class="card metric"><small>मोबाइल</small><b style="font-size:15px">${esc(m.mobile)}</b></div>
-   <div class="card metric"><small>स्थिती</small><b style="font-size:15px">${esc(m.ownerStatus)}</b></div>
+   <div class="card metric"><small>एकूण सभासद</small><b>52</b></div>
+   <div class="card metric"><small>${esc(state.currentFY)} एकूण देणी</small><b>${money(totalDue)}</b></div>
+   <div class="card metric"><small>प्राप्त</small><b>${money(totalReceived)}</b></div>
+   <div class="card metric"><small>थकबाकी</small><b>${money(totalDue-totalReceived)}</b></div>
  </div>
- <div class="card adminbar"><b>🔒 View Only</b><div class="muted" style="margin-top:4px">सभासदाला प्रशासकीय माहिती पाहता येईल; कोणतीही नोंद, भरणा, MOM, सदस्य माहिती किंवा सेटिंग बदलता येणार नाही.</div></div>
- <div class="section"><h2>माझी देखभाल — ${esc(state.currentFY)}</h2></div>
- <div class="card">${fyMonths(state.currentFY).map(month=>`<div class="row"><span>${month}</span><span class="pill ${isPaid(m,month)?'ok':'bad'}">${isPaid(m,month)?'भरले':'बाकी ₹1,000'}</span></div>`).join('')}</div>
- <div class="section"><h2>माझी कागदपत्रे</h2></div><div class="docgrid">${docs}</div>
- <div class="section"><h2>माझी भाडेकरू माहिती</h2></div>
- <div class="card">${m.tenant?`<div class="row"><span>नाव</span><b>${esc(m.tenant.name)}</b></div><div class="row"><span>मोबाइल</span><b>${esc(m.tenant.mobile)}</b></div><div class="row"><span>NOC</span><b>${esc(m.noc)}</b></div>`:'<span class="pill ok">भाडेकरू नोंद नाही</span>'}</div>
- <div class="section"><h2>📢 संस्था सूचना</h2></div>
- <div class="listbox">${state.notices.map(n=>`<div class="listitem notice"><h3>${esc(n[0])}</h3><div class="muted">${esc(n[2])} • ${esc(n[3])}</div><p>${esc(n[1])}</p></div>`).join('')}</div>
- <div class="section"><h2>👔 समिती</h2></div>
- <div class="card">${state.committee.map(c=>`<div class="row"><div><b>${esc(c[0])}</b><div class="muted">${esc(c[1])}</div></div><span class="readonly">View Only</span></div>`).join('')}</div>
- <div class="section"><h2>📅 सभा / AGM / MOM</h2></div>
- <div class="listbox">${state.meetings.map(x=>`<div class="listitem"><h3>${esc(x.type)} • ${esc(x.date)}</h3><div class="muted">${esc(x.time)} • उपस्थित: ${esc(x.attendees)}</div><div style="margin-top:7px"><b>Agenda:</b> ${esc(x.agenda)}</div><div style="margin-top:7px"><b>Present:</b> ${esc((x.presentMembers||[]).join(', ')||'नोंद नाही')}</div><div style="margin-top:7px"><b>Consents:</b> ${esc(x.consents||'नोंद नाही')}</div><div style="margin-top:7px"><b>MOM:</b> ${esc(x.mom||'प्रलंबित')}</div></div>`).join('')}</div>
+ <div class="card adminbar"><b>🔒 Member View Only</b><div class="muted" style="margin-top:4px">Admin मध्ये उपलब्ध असलेली माहिती येथेही पाहता येईल. सभासदाला कोणताही डेटा बदलता, भरणा नोंदवता, MOM बदलता किंवा सेटिंग बदलता येणार नाही.</div></div>
+ <div class="section"><h2>👥 सर्व 52 सभासदांची माहिती</h2></div>
+ <div class="membergrid">${state.members.map(mm=>`<div class="membercard"><b>${esc(mm.name)}</b><div class="muted">${esc(mm.mobile)} • ${esc(mm.ownerStatus)}</div><div class="muted">फ्लॅट: ${esc(mm.flat)}</div><div class="muted">देखभाल: ${money(mm.maintenance)} / महिना</div>${mm.tenant?`<div class="muted">भाडेकरू: ${esc(mm.tenant.name)} • NOC: ${esc(mm.noc)}</div>`:''}</div>`).join('')}</div>
+ <div class="section"><h2>💰 देखभाल — ${esc(state.currentFY)}</h2></div>
+ <div class="card"><div class="row"><span>निवडलेला सभासद</span><b>${esc(m.name)} • ${esc(m.flat)}</b></div>${months.map(month=>`<div class="row"><span>${month}</span><span class="pill ${isPaid(m,month)?'ok':'bad'}">${isPaid(m,month)?'भरले':'बाकी '+money(m.maintenance)}</span></div>`).join('')}</div>
+ <div class="section"><h2>📊 Financial Year Audit Report</h2></div>
+ <div class="card">${months.map(month=>{let rec=state.members.filter(mm=>isPaid(mm,month)).reduce((sum,mm)=>sum+mm.maintenance,0);return `<div class="row"><span>${month}</span><span>${money(rec)} / ${money(52000)}</span></div>`}).join('')}<div class="row"><b>प्रलंबित कागदपत्रे</b><b>${pendingDocs}</b></div><div class="row"><b>प्रलंबित तक्रारी</b><b>${openComplaints}</b></div></div>
+ <div class="section"><h2>📢 संस्था सूचना</h2></div><div class="listbox">${state.notices.map(n=>`<div class="listitem notice"><h3>${esc(n[0])}</h3><div class="muted">${esc(n[2])} • ${esc(n[3])}</div><p>${esc(n[1])}</p></div>`).join('')}</div>
+ <div class="section"><h2>👔 समिती सदस्य</h2></div><div class="card">${state.committee.map(c=>`<div class="row"><div><b>${esc(c[0])}</b><div class="muted">${esc(c[1])}</div></div><span class="readonly">View Only</span></div>`).join('')}</div>
+ <div class="section"><h2>📅 सभा / AGM / MOM / उपस्थिती / Consents</h2></div><div class="listbox">${state.meetings.map(x=>`<div class="listitem"><h3>${esc(x.type)} • ${esc(x.date)}</h3><div class="muted">${esc(x.time)} • उपस्थित: ${esc(x.attendees)}</div><div style="margin-top:7px"><b>Agenda:</b> ${esc(x.agenda)}</div><div style="margin-top:7px"><b>Present:</b> ${esc((x.presentMembers||[]).join(', ')||'नोंद नाही')}</div><div style="margin-top:7px"><b>Consents:</b> ${esc(x.consents||'नोंद नाही')}</div><div style="margin-top:7px"><b>MOM:</b> ${esc(x.mom||'प्रलंबित')}</div></div>`).join('')}</div>
  <div class="section"><h2>💧 पाणीपुरवठा</h2></div><div class="card water"><div class="row"><span>सकाळी</span><b>${esc(state.water.morning)}</b></div><div class="row"><span>संध्याकाळी</span><b>${esc(state.water.evening)}</b></div></div>
- <div class="section"><h2>🧹 केअरटेकर</h2></div>
- <div class="card"><div class="row"><span>नाव</span><b>${esc(state.caretaker.name)}</b></div><div class="row"><span>भूमिका</span><b>${esc(state.caretaker.role)}</b></div><div class="row"><span>मासिक वेतन</span><b>${money(state.caretaker.salary)}</b></div><div class="section"><h2 style="font-size:14px">कामे</h2></div>${state.caretaker.works.map(w=>`<div class="listitem">✓ ${esc(w)}</div>`).join('')}</div>
- <div class="section"><h2>📊 आर्थिक वर्ष Audit Summary</h2></div>
- <div class="card">${fyMonths(state.currentFY).map(month=>{let rec=state.members.filter(x=>isPaid(x,month)).reduce((sum,x)=>sum+x.maintenance,0);return `<div class="row"><span>${month}</span><span>${money(rec)}</span></div>`}).join('')}</div>
- <div class="section"><h2>⚖️ दंड व कायदेशीर कारवाई</h2></div>
- <div class="listbox">${state.penalties.map(x=>`<div class="listitem"><b>${esc(x.member)}</b><div class="muted">${esc(x.reason)} • ${money(x.amount)} • ${esc(x.status)}</div></div>`).join('')}${state.legalActions.map(x=>`<div class="listitem legalbox"><b>${esc(x.member)}</b><div class="muted">${esc(x.stage)} • ${esc(x.status)}</div></div>`).join('')}</div>
- <div class="section"><h2>📜 कायदा — नोंदणी प्रमाणपत्रातील संदर्भ</h2></div><div class="card legalbox"><b>${esc(SOCIETY.act)}</b><p class="muted">कलम 9(1), कलम 12(1) आणि नियम 10(1) हे प्रमाणपत्रावर नमूद संदर्भ आहेत.</p></div>
- <div class="section"><h2>🔔 सूचना</h2></div><div class="card"><div class="row"><span>सूचना क्रमांक</span><b>${esc(state.notification.phone)}</b></div><div class="row"><span>मासिक सूचना</span><span class="pill ${state.notification.enabled?'ok':'bad'}">${state.notification.enabled?'सक्रिय':'बंद'}</span></div><div class="muted">प्रत्यक्ष SMS/WhatsApp साठी provider/backend आवश्यक आहे.</div></div>
- <div class="section"><h2>📝 माझ्या तक्रारी / अभिप्राय</h2></div>
- <div class="listbox">${myComplaints.map(c=>`<div class="listitem complaint"><b>${esc(c.id)} • ${esc(c.subject)}</b><div class="muted">${esc(c.status)} • ${esc(c.date)}</div></div>`).join('')}${myFeedback.map(f=>`<div class="listitem"><b>${esc(f.type)}</b><div class="muted">${esc(f.status)} • ${esc(f.date)}</div><p>${esc(f.text)}</p></div>`).join('')}${!myComplaints.length&&!myFeedback.length?'<div class="empty">तुमच्या नावावर नोंद नाही.</div>':''}</div>
+ <div class="section"><h2>🧹 केअरटेकर / सेवक</h2></div><div class="card"><div class="row"><span>नाव</span><b>${esc(state.caretaker.name)}</b></div><div class="row"><span>भूमिका</span><b>${esc(state.caretaker.role)}</b></div><div class="row"><span>मासिक वेतन</span><b>${money(state.caretaker.salary)}</b></div>${state.caretaker.works.map(w=>`<div class="listitem">✓ ${esc(w)}</div>`).join('')}</div>
+ <div class="section"><h2>⚖️ दंड व कायदेशीर कारवाई</h2></div><div class="listbox">${state.penalties.map(x=>`<div class="listitem"><b>${esc(x.member)}</b><div class="muted">${esc(x.reason)} • ${money(x.amount)} • ${esc(x.status)}</div></div>`).join('')}${state.legalActions.map(x=>`<div class="listitem legalbox"><b>${esc(x.member)}</b><div class="muted">${esc(x.stage)} • ${esc(x.status)} • ${esc(x.date)}</div></div>`).join('')}</div>
+ <div class="section"><h2>📜 महाराष्ट्र सहकारी संस्था कायदा</h2></div><div class="card legalbox"><b>${esc(SOCIETY.act)}</b><p class="muted">प्रमाणपत्रावर नमूद कलम 9(1), कलम 12(1) आणि नियम 10(1) संदर्भ.</p></div>
+ <div class="section"><h2>📝 तक्रारी / Feedback / Concerns</h2></div><div class="listbox">${state.complaints.map(c=>`<div class="listitem complaint"><b>${esc(c.id)} • ${esc(c.subject)}</b><div class="muted">${esc(c.member)} • ${esc(c.status)} • ${esc(c.date)}</div></div>`).join('')}${state.feedback.map(f=>`<div class="listitem"><b>${esc(f.type)}</b><div class="muted">${esc(f.member||'सभासद')} • ${esc(f.status)} • ${esc(f.date)}</div><p>${esc(f.text)}</p></div>`).join('')}</div>
+ <div class="section"><h2>📁 Society / Member Documents</h2></div><div class="card"><div class="docgrid">${docs}</div><div class="muted" style="margin-top:10px">वरील कागदपत्रे View Only आहेत.</div></div>
+ <div class="section"><h2>🏗️ पुनर्विकास</h2></div><div class="card">${state.redevelopment.map(x=>`<div class="row"><span>${esc(x[0])}</span><b>${esc(x[1])}</b></div>`).join('')}</div>
+ <div class="section"><h2>📱 SMS / Notification Status</h2></div><div class="card"><div class="row"><span>Admin notification number</span><b>${esc(state.notification.phone)}</b></div><div class="row"><span>Monthly notification</span><span class="pill ${state.notification.enabled?'ok':'bad'}">${state.notification.enabled?'सक्रिय':'बंद'}</span></div><div class="row"><span>Last notification</span><b>${esc(state.notification.lastSent||'अद्याप नाही')}</b></div></div>
+ <div class="section"><h2>📋 Audit Log</h2></div><div class="listbox">${state.audit.map(a=>`<div class="listitem"><b>${esc(a.action)}</b><div class="muted">${esc(a.date)}</div><div>${esc(a.detail)}</div></div>`).join('')}</div>
  </div>`;
 }
 function addMeeting(){let m={type:document.getElementById('mtype').value,date:document.getElementById('mdate').value||new Date().toLocaleDateString('mr-IN'),time:document.getElementById('mtime').value||'',agenda:document.getElementById('magenda').value||'',presentMembers:document.getElementById('mpresent').value.split(',').map(x=>x.trim()).filter(Boolean),consents:document.getElementById('mconsent').value||'',mom:document.getElementById('mmom').value||'MOM प्रलंबित',attendees:document.getElementById('mpresent').value.split(',').map(x=>x.trim()).filter(Boolean).length};state.meetings.unshift(m);state.audit.unshift({date:new Date().toLocaleString('mr-IN'),action:'नवीन सभा',detail:`${m.type} • ${m.date}`});save();closeModal();openModal('committee')}
 function auditReportModal(){let fy=state.currentFY;let months=fyMonths(fy);let totalDue=state.members.reduce((s,m)=>s+months.length*m.maintenance,0);let totalReceived=state.members.reduce((s,m)=>s+months.filter(x=>isPaid(m,x)).length*m.maintenance,0);let outstanding=totalDue-totalReceived;let fullyPaid=state.members.filter(m=>months.every(x=>isPaid(m,x))).length;openHtml(`<h2>Financial Year Audit Report</h2><div class="adminbar"><div class="two"><select onchange="state.currentFY=this.value;save();auditReportModal()"><option value="2026-27" ${fy==='2026-27'?'selected':''}>2026-27</option><option value="2025-26" ${fy==='2025-26'?'selected':''}>2025-26</option></select><div class="card" style="margin:0"><b>52 सभासद</b></div></div></div><div class="grid"><div class="card metric"><small>एकूण देणी</small><b>${money(totalDue)}</b></div><div class="card metric"><small>प्राप्त</small><b>${money(totalReceived)}</b></div><div class="card metric"><small>थकबाकी</small><b>${money(outstanding)}</b></div><div class="card metric"><small>पूर्ण भरलेले</small><b>${fullyPaid}/52</b></div></div><div class="section"><h2>महिनानिहाय स्थिती</h2></div><div class="card">${months.map(month=>{let rec=state.members.filter(m=>isPaid(m,month)).reduce((s,m)=>s+m.maintenance,0);return `<div class="row"><span>${month}</span><span>${money(rec)} / ${money(52000)}</span></div>`}).join('')}</div><button class="btn" onclick="window.print()">Print / PDF</button>`)}
-function addComplaint(){let s=document.getElementById('csub').value.trim();let t=document.getElementById('ctxt').value.trim();if(!s||!t)return alert('विषय आणि वर्णन भरा.');let id='C-'+(1025+state.complaints.length);state.complaints.unshift({id,subject:s,status:'नवीन',date:new Date().toLocaleDateString('mr-IN'),member:'सभासद'});state.lastComplaintNotice++;state.audit.unshift({date:new Date().toLocaleString('mr-IN'),action:'नवीन तक्रार',detail:`${id} • ${s}`});save();closeModal();alert('तक्रार समितीकडे सूचना म्हणून नोंदवली.');openModal('complaints')}
-function addFeedback(){let t=document.getElementById('ftext').value.trim();if(!t)return alert('अभिप्राय लिहा.');state.feedback.unshift({type:document.getElementById('ftype').value,text:t,status:'नवीन',date:new Date().toLocaleDateString('mr-IN')});save();closeModal();alert('अभिप्राय नोंदवला.');openModal('feedback')}
+function addComplaint(){let s=document.getElementById('csub').value.trim();let t=document.getElementById('ctxt').value.trim();if(!s||!t)return alert('विषय आणि वर्णन भरा.');let id='C-'+(1025+state.complaints.length);state.complaints.unshift({id,subject:s,status:'नवीन',date:new Date().toLocaleDateString('mr-IN'),member:'सभासद'});state.lastComplaintNotice++;notifyAdmin('New complaint',`${id} • ${s}`);state.audit.unshift({date:new Date().toLocaleString('mr-IN'),action:'नवीन तक्रार',detail:`${id} • ${s}`});save();closeModal();alert('तक्रार समितीकडे सूचना म्हणून नोंदवली.');openModal('complaints')}
+function addFeedback(){let t=document.getElementById('ftext').value.trim();if(!t)return alert('अभिप्राय लिहा.');const ft=document.getElementById('ftype').value;state.feedback.unshift({type:ft,text:t,status:'नवीन',date:new Date().toLocaleDateString('mr-IN')});notifyAdmin('New feedback',`${ft} • ${t.slice(0,80)}`);save();closeModal();alert('अभिप्राय नोंदवला.');openModal('feedback')}
 function openHtml(html){document.getElementById('sheet').innerHTML=html+`<button class="btn secondary no-print" style="width:100%;margin-top:10px" onclick="closeModal()">बंद करा</button>`;document.getElementById('modal').classList.add('show')}
 function closeModal(){document.getElementById('modal').classList.remove('show')}
 function demoDoc(flat,key){alert(`${label(key)}: ${flat} साठी डेमो दस्तऐवज कृती. Production मध्ये सुरक्षित storage + audit log.`)}
 if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js'));render();
+</script>
+
+<script>
+(function(){
+  const ADMIN_PIN="9870";
+  window.CHS_RBAC={
+    role:sessionStorage.getItem("chsRole")||"member",
+    isAdmin(){return this.role==="admin"},
+    setRole(r){this.role=r;sessionStorage.setItem("chsRole",r);this.apply()},
+    requireAdmin(){if(this.isAdmin())return true;alert("View Only: Admin permission is required for this action.");return false},
+    apply(){
+      document.documentElement.dataset.chsRole=this.role;
+      document.querySelectorAll("[data-admin-only]").forEach(el=>{
+        el.disabled=!this.isAdmin(); el.setAttribute("aria-disabled",String(!this.isAdmin()));
+      });
+      const b=document.getElementById("chs-role-badge");
+      if(b)b.textContent=this.isAdmin()?"ADMIN • Full Access":"MEMBER • View Only";
+    }
+  };
+  window.CHS_ADMIN_LOGIN=function(){const pin=prompt("Enter Admin PIN");if(pin===ADMIN_PIN)CHS_RBAC.setRole("admin");else alert("Invalid PIN. Admin Mode access denied.")};
+  window.CHS_MEMBER_MODE=function(){CHS_RBAC.setRole("member")};
+  document.addEventListener("click",e=>{
+    const el=e.target.closest("[data-admin-only]");
+    if(el&&!CHS_RBAC.isAdmin()){e.preventDefault();e.stopImmediatePropagation();alert("View Only: Admin permission is required for this action.");}
+  },true);
+  document.addEventListener("DOMContentLoaded",()=>{
+    const h=document.querySelector("header")||document.body.firstElementChild;
+    if(h&&!document.getElementById("chs-role-badge")){
+      const b=document.createElement("span");b.id="chs-role-badge";
+      b.style.cssText="display:inline-block;margin:6px 0;padding:5px 10px;border-radius:999px;background:#eee;font-size:12px;font-weight:700";
+      h.appendChild(b);
+    }
+    CHS_RBAC.apply();
+  });
+})();
+</script>
+
+<script>
+window.CHS_FCM={
+  configured:false,
+  requestPermission:async function(){
+    if(!("Notification" in window))return{ok:false,reason:"Notifications unsupported"};
+    const p=await Notification.requestPermission();
+    return{ok:p==="granted",permission:p};
+  }
+};
 </script>
 </body></html>
